@@ -350,4 +350,5 @@ do
     FLOATING_IP=$(openstack floating ip create -f value -c floating_ip_address provider-datacentre)
     LB_VIP_PORT_ID=$(openstack loadbalancer show $username-lb -f value -c vip_port_id)
     openstack floating ip set --port $LB_VIP_PORT_ID $FLOATING_IP
+    fi
 done
