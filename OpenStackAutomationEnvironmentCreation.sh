@@ -1,9 +1,5 @@
 #!/bin/bash
 
-
-# Defining Variables
-tagdefault="course:test"
-
 # Starting the Script
 
 source ~/admin-rc
@@ -13,13 +9,13 @@ export OS_COMPUTE_API_VERSION=2.55
 echo "Creation of OpenStack Environment Started"
 echo
 
-openstack network set --description "Shared external network for CloudLearn" --tag $tagdefault provider-datacentre
+openstack network set --description "Shared external network for CloudLearn" --tag course:test provider-datacentre
 
 echo "Creating new OpenStack domain named CloudLearnDomain"
 openstack domain create --description "Domain for CloudLearn" CloudLearnDomain 
 
 echo "Creating new project named CloudLearn"
-openstack project create --domain CloudLearnDomain --description "Project for CloudLearn" CloudLearn --tag $tagdefault
+openstack project create --domain CloudLearnDomain --description "Project for CloudLearn" CloudLearn --tag course:test
 
 echo "Creating Student group and Instructor group"
 openstack group create --domain CloudLearnDomain --description "Group for Students" StudentGroup 
@@ -55,7 +51,7 @@ do
         openstack group add user --domain CloudLearnDomain InstructorGroup $username
 
         echo "Creating project for instructor"
-        openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag $tagdefault
+        openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
 
         openstack role add --project $projectname --user $username admin
 
@@ -65,7 +61,7 @@ do
         --project-domain CloudLearnDomain \
         --no-share \
         --description "Private network for $username" \
-        --tag $tagdefault \
+        --tag course:test \
         $username-private-network
 
         echo "Creating the subnet for the private network"
@@ -75,7 +71,7 @@ do
         --network $username-private-network \
         --subnet-range 192.168.0.0/24 \
         --description "Private subnet for $username" \
-        --tag $tagdefault \
+        --tag course:test \
         $username-private-subnet
 
         echo "Creating router for $username"
@@ -84,7 +80,7 @@ do
         --project-domain CloudLearnDomain \
         --description "Router for $username" \
         $username-router \
-        --tag $tagdefault
+        --tag course:test
 
         openstack router add subnet $username-router $username-private-subnet
         openstack router set --external-gateway provider-datacentre $username-router
@@ -95,7 +91,7 @@ do
         --project $projectname \
         --description "JumpHost security group for $username" \
         $username-jumphost-secgroup \
-        --tag $tagdefault
+        --tag course:test
 
         openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 22 --ingress --description "Allow SSH" $username-jumphost-secgroup
 
@@ -106,7 +102,7 @@ do
         --project $projectname \
         --description "WordPress security group for $username" \
         $username-wordpress-secgroup \
-        --tag $tagdefault
+        --tag course:test
 
         openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 80 --ingress --description "Allow HTTP" $username-wordpress-secgroup
         openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 443 --ingress --description "Allow HTTPS" $username-wordpress-secgroup
@@ -122,7 +118,7 @@ do
         openstack group add user --domain CloudLearnDomain StudentGroup $username
 
         echo "Creating project for student"
-        openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag $tagdefault
+        openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
 
         echo "Creating a private network for student $username"
         openstack network create \
@@ -147,7 +143,7 @@ do
         --project-domain CloudLearnDomain \
         --description "Router for $username" \
         $username-router \
-        --tag $tagdefault
+        --tag course:test
         openstack router add subnet $username-router $username-private-subnet
         openstack router set --external-gateway provider-datacentre $username-router
 
@@ -158,7 +154,7 @@ do
         --project $projectname \
         --description "JumpHost security group for $username" \
         $username-jumphost-secgroup \
-        --tag $tagdefault
+        --tag course:test
 
         openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 22 --ingress --description "Allow SSH" $username-jumphost-secgroup
         
@@ -169,7 +165,7 @@ do
         --project $projectname \
         --description "WordPress security group for $username" \
         $username-wordpress-secgroup \
-        --tag $tagdefault
+        --tag course:test
         openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 80 --ingress --description "Allow HTTP" $username-wordpress-secgroup
         openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 443 --ingress --description "Allow HTTPS" $username-wordpress-secgroup
 
@@ -199,7 +195,7 @@ openstack image create \
 --disk-format qcow2 \
 --container-format bare \
 --public \
---tag $tagdefault \
+--tag course:test \
 Ubuntu-Server
 
 openstack flavor create \
