@@ -63,7 +63,7 @@ done
 
 # Creating users, projects and assigning roles based on CSV file
 allinstructors=$(mktemp)
-tail -n +2 Original_Popis_studenata.csv | while IFS=';' read -r ime prezime rola
+while IFS=';' read -r ime prezime rola
 do
     username="$ime.$prezime"
 
@@ -71,7 +71,7 @@ do
     openstack user create --domain CloudLearnDomain --project CloudLearn --password Pa$$w0rd123 $ime.$prezime
     
     # Adding user to appropriate group
-    if [ "$rola" == "instruktor" ]; then
+    if [[ "$rola" == "instruktor" ]]; then
         projectname="$username-Instructor-Project"
 
         echo "Adding user to instructor group"
@@ -137,8 +137,8 @@ do
         openstack role add --project $projectname --user $username admin
 
         echo "$username" >> $allinstructors
-    
-    elif [ "$rola" == "student" ]; then
+
+    elif [[ "$rola" == "student" ]]; then
         projectname="$username-Student-Project"
 
         echo "Adding user to student group"
@@ -198,25 +198,25 @@ do
 
         openstack role add --project $projectname --user $username admin
     fi
-done
+done < <(tail -n +2 Original_Popis_studenata.csv)
 
 # Assigning all instructors as admins in all student projects
-tail -n +2 Original_Popis_studenata.csv | while IFS=';' read -r ime prezime rola
+while IFS=';' read -r ime prezime rola
 do
-    if [ "$rola" == "student" ]; then
+    if [[ "$rola" == "student" ]]; then
         projectname="$ime.$prezime-Student-Project"
         while read -r instructor; do
             openstack role add --project $projectname --user $instructor admin
         done < $allinstructors
     fi
-done
+done < <(tail -n +2 Original_Popis_studenata.csv)
 
 rm -f $allinstructors
 # Creating instances and configuring
 
-tail -n +2 Original_Popis_studenata.csv | while IFS=';' read -r ime prezime rola
+while IFS=';' read -r ime prezime rola
 do
-    if [ "$rola" == "instruktor" ]; then
+    if [[ "$rola" == "instruktor" ]]; then
     username="$ime.$prezime"
     projectname="$username-Instructor-Project"
 
@@ -241,6 +241,8 @@ do
         --key-name $username-CombinedJumpHost-key \
         $username-jumphost
 
+        openstack server wait --timeout 600 $username-jumphost
+
     echo "Creating WordPress instances for $username"
 
     for i in {1..4}; do
@@ -252,6 +254,8 @@ do
             --key-name $username-WordPress-key \
             --user-data cloud-init-wordpress.yaml \
             $username-wordpress-$i
+
+        openstack server wait --timeout 600 $username-wordpress-$i
     done
 
     openstack loadbalancer create --name $username-lb --vip-subnet-id $username-private-subnet --project $projectname
@@ -284,7 +288,7 @@ do
     LB_VIP_PORT_ID=$(openstack loadbalancer show $username-lb -f value -c vip_port_id)
     openstack floating ip set --port $LB_VIP_PORT_ID $FLOATING_IP
 
-    elif [ "$rola" == "student" ]; then
+    elif [[ "$rola" == "student" ]]; then
     username="$ime.$prezime"
     projectname="$username-Student-Project"
 
@@ -307,6 +311,8 @@ do
         --key-name $username-CombinedJumpHost-key \
         $username-jumphost
 
+    openstack server wait --timeout 600 $username-jumphost
+
     echo "Creating WordPress instances for $username"
 
     for i in {1..4}; do 
@@ -318,6 +324,8 @@ do
             --key-name $username-WordPress-key \
             --user-data cloud-init-wordpress.yaml \
             $username-wordpress-$i
+
+        openstack server wait --timeout 600 $username-wordpress-$i
     done
 
         # Create load balancer for student
@@ -349,4 +357,4 @@ do
     LB_VIP_PORT_ID=$(openstack loadbalancer show $username-lb -f value -c vip_port_id)
     openstack floating ip set --port $LB_VIP_PORT_ID $FLOATING_IP
     fi
-done
+done < <(tail -n +2 Original_Popis_studenata.csv)
