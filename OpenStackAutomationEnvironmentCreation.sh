@@ -71,7 +71,7 @@ do
     openstack user create --domain CloudLearnDomain --project CloudLearn --password Pa$$w0rd123 $ime.$prezime
     
     # Adding user to appropriate group
-    if [ "$rola" == "instructor" ]; then
+    if [ "$rola" == "instruktor" ]; then
         projectname="$username-Instructor-Project"
 
         echo "Adding user to instructor group"
@@ -216,7 +216,7 @@ rm -f $allinstructors
 
 tail -n +2 Original_Popis_studenata.csv | while IFS=';' read -r ime prezime rola
 do
-    if [ "$rola" == "instructor" ]; then
+    if [ "$rola" == "instruktor" ]; then
     username="$ime.$prezime"
     projectname="$username-Instructor-Project"
 
