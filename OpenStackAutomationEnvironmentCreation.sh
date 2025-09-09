@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 # Defining Variables
 tagdefault="course:test"
 
@@ -22,6 +21,19 @@ openstack project create --domain CloudLearnDomain --description "Project for Cl
 echo "Creating Student group and Instructor group"
 openstack group create --domain CloudLearnDomain --description "Group for Students" StudentGroup 
 openstack group create --domain CloudLearnDomain --description "Group for Instructors" InstructorGroup 
+
+# Wait for groups to exist
+for i in {1..10}; do
+    openstack group show StudentGroup && break
+    echo "Waiting for Student Group to be available..."
+    sleep 2
+done
+
+for i in {1..10}; do
+    openstack group show InstructorGroup && break
+    echo "Waiting for Instructor Group to be available..."
+    sleep 2
+done
 
 # Creating users, projects and assigning roles based on CSV file
 allinstructors=$(mktemp)
