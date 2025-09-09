@@ -24,13 +24,13 @@ openstack group create --domain CloudLearnDomain --description "Group for Instru
 
 # Wait for groups to exist
 for i in {1..10}; do
-    openstack group show StudentGroup && break
+    openstack group show --domain CLoudlearnDomain StudentGroup && break
     echo "Waiting for Student Group to be available..."
     sleep 2
 done
 
 for i in {1..10}; do
-    openstack group show InstructorGroup && break
+    openstack group show --domain CloudLearnDomain InstructorGroup && break
     echo "Waiting for Instructor Group to be available..."
     sleep 2
 done
