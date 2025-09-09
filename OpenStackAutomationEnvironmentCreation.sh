@@ -2,7 +2,7 @@
 
 # Starting the Script
 
-source ~/admin-rc
+source admin-rc
 
 export OS_COMPUTE_API_VERSION=2.55
 
