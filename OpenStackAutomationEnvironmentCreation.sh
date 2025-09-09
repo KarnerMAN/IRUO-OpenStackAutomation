@@ -65,6 +65,11 @@ done
 allinstructors=$(mktemp)
 while IFS=';' read -r ime prezime rola
 do
+
+    ime=$(echo "$ime" | xargs | tr -d '\r')
+    prezime=$(echo "$prezime" | xargs | tr -d '\r')
+    rola=$(echo "$rola" | xargs | tr -d '\r')
+
     username="$ime.$prezime"
 
     echo "Adding user $ime $prezime to project"
@@ -203,6 +208,11 @@ done < <(tail -n +2 Original_Popis_studenata.csv)
 # Assigning all instructors as admins in all student projects
 while IFS=';' read -r ime prezime rola
 do
+
+    ime=$(echo "$ime" | xargs | tr -d '\r')
+    prezime=$(echo "$prezime" | xargs | tr -d '\r')
+    rola=$(echo "$rola" | xargs | tr -d '\r')
+
     if [[ "$rola" == "student" ]]; then
         projectname="$ime.$prezime-Student-Project"
         while read -r instructor; do
@@ -216,6 +226,11 @@ rm -f $allinstructors
 
 while IFS=';' read -r ime prezime rola
 do
+
+    ime=$(echo "$ime" | xargs | tr -d '\r')
+    prezime=$(echo "$prezime" | xargs | tr -d '\r')
+    rola=$(echo "$rola" | xargs | tr -d '\r')
+
     if [[ "$rola" == "instruktor" ]]; then
     username="$ime.$prezime"
     projectname="$username-Instructor-Project"
