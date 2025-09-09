@@ -192,7 +192,7 @@ rm -f $allinstructors
 
 # Configuring Image and Flavor
 
-wget https://cloud-images.ubuntu.com/daily/server/jammy/current/jammy-server-cloudimg-amd64.img
+wget -q https://cloud-images.ubuntu.com/daily/server/jammy/current/jammy-server-cloudimg-amd64.img
 
 openstack image create \
 --file jammy-server-cloudimg-amd64.img \
