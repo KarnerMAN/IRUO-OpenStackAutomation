@@ -80,7 +80,7 @@ do
         projectname="$username-Instructor-Project"
 
         echo "Adding user to instructor group"
-        openstack group add user --user-domain CloudLearnDomain InstructorGroup $username
+        openstack group add user --group-domain CloudLearnDomain InstructorGroup $username
 
         echo "Creating project for instructor"
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
@@ -147,7 +147,7 @@ do
         projectname="$username-Student-Project"
 
         echo "Adding user to student group"
-        openstack group add user --user-domain CloudLearnDomain StudentGroup $username
+        openstack group add user --group-domain CloudLearnDomain StudentGroup $username
 
         echo "Creating project for student"
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
