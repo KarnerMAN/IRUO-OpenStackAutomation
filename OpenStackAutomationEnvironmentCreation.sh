@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 # Defining Variables
 tagdefault="course:test"
 
@@ -24,7 +25,7 @@ openstack group create --domain CloudLearnDomain --description "Group for Instru
 
 # Wait for groups to exist
 for i in {1..10}; do
-    openstack group show --domain CLoudlearnDomain StudentGroup && break
+    openstack group show --domain CloudLearnDomain StudentGroup && break
     echo "Waiting for Student Group to be available..."
     sleep 2
 done
@@ -45,59 +46,11 @@ do
     openstack user create --domain CloudLearnDomain --project CloudLearn --password Pa$$w0rd123 $ime.$prezime
     
     # Adding user to appropriate group
-    if [ "$rola" == "student" ]; then
-        projectname="$username-Student-Project"
-
-        echo "Adding user to student group"
-        openstack group add user StudentGroup $username
-
-        echo "Creating project for student"
-        openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag $tagdefault
-
-        echo "Creating a private network for student $username"
-        openstack network create \
-        --project $projectname \
-        --project-domain CloudLearnDomain \
-        --no-share \
-        --description "Private network for $username" \
-        $username-private-network
-
-        echo "Creating the subnet for the private network"
-        openstack subnet create \
-        --project $projectname \
-        --project-domain CloudLearnDomain \
-        --network $username-private-network \
-        --subnet-range 192.168.0.0/24 \
-        --description "Private subnet for $username" \
-        $username-private-subnet
-
-        echo "Creating router for $username"
-        openstack router create \
-        --project $projectname \
-        --project-domain CloudLearnDomain \
-        --description "Router for $username" \
-        $username-router \
-        --tag $tagdefault
-        openstack router add subnet $username-router $username-private-subnet
-        openstack router set --external-gateway provider-datacentre $username-router
-
-        echo "Creating security group and rules for $username"
-        openstack security group create \
-        --project $projectname \
-        --description "Security group for $username" \
-        $username-secgroup \
-        --tag $tagdefault
-        
-        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol icmp --ingress --description "Allow ICMP" $username-secgroup
-        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 22 --ingress --description "Allow SSH" $username-secgroup
-        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 80 --ingress --description "Allow HTTP" $username-secgroup
-
-        openstack role add --project $projectname --user $username admin
-    elif [ "$rola" == "instructor" ]; then
+    if [ "$rola" == "instructor" ]; then
         projectname="$username-Instructor-Project"
 
         echo "Adding user to instructor group"
-        openstack group add user InstructorGroup $username
+        openstack group add user --domain CloudLearnDomain InstructorGroup $username
 
         echo "Creating project for instructor"
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag $tagdefault
@@ -134,18 +87,91 @@ do
         openstack router add subnet $username-router $username-private-subnet
         openstack router set --external-gateway provider-datacentre $username-router
 
-        echo "Creating security group and rules for $username"
+        echo "Creating JumpHost security group for $username"
+        
         openstack security group create \
         --project $projectname \
-        --description "Security group for $username" \
-        $username-secgroup \
+        --description "JumpHost security group for $username" \
+        $username-jumphost-secgroup \
         --tag $tagdefault
 
-        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol icmp --ingress --description "Allow ICMP" $username-secgroup
-        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 22 --ingress --description "Allow SSH" $username-secgroup
-        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 80 --ingress --description "Allow HTTP" $username-secgroup
+        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 22 --ingress --description "Allow SSH" $username-jumphost-secgroup
+
+        
+        echo "Creating WordPress security group for $username"
+        
+        openstack security group create \
+        --project $projectname \
+        --description "WordPress security group for $username" \
+        $username-wordpress-secgroup \
+        --tag $tagdefault
+
+        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 80 --ingress --description "Allow HTTP" $username-wordpress-secgroup
+        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 443 --ingress --description "Allow HTTPS" $username-wordpress-secgroup
+
+        openstack role add --project $projectname --user $username admin
 
         echo "$username" >> $allinstructors
+    
+    elif [ "$rola" == "student" ]; then
+        projectname="$username-Student-Project"
+
+        echo "Adding user to student group"
+        openstack group add user --domain CloudLearnDomain StudentGroup $username
+
+        echo "Creating project for student"
+        openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag $tagdefault
+
+        echo "Creating a private network for student $username"
+        openstack network create \
+        --project $projectname \
+        --project-domain CloudLearnDomain \
+        --no-share \
+        --description "Private network for $username" \
+        $username-private-network
+
+        echo "Creating the subnet for the private network"
+        openstack subnet create \
+        --project $projectname \
+        --project-domain CloudLearnDomain \
+        --network $username-private-network \
+        --subnet-range 192.168.0.0/24 \
+        --description "Private subnet for $username" \
+        $username-private-subnet
+
+        echo "Creating router for $username"
+        openstack router create \
+        --project $projectname \
+        --project-domain CloudLearnDomain \
+        --description "Router for $username" \
+        $username-router \
+        --tag $tagdefault
+        openstack router add subnet $username-router $username-private-subnet
+        openstack router set --external-gateway provider-datacentre $username-router
+
+
+        echo "Creating JumpHost security group for $username"
+        
+        openstack security group create \
+        --project $projectname \
+        --description "JumpHost security group for $username" \
+        $username-jumphost-secgroup \
+        --tag $tagdefault
+
+        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 22 --ingress --description "Allow SSH" $username-jumphost-secgroup
+        
+        
+        echo "Creating WordPress security group for $username"
+        
+        openstack security group create \
+        --project $projectname \
+        --description "WordPress security group for $username" \
+        $username-wordpress-secgroup \
+        --tag $tagdefault
+        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 80 --ingress --description "Allow HTTP" $username-wordpress-secgroup
+        openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 443 --ingress --description "Allow HTTPS" $username-wordpress-secgroup
+
+        openstack role add --project $projectname --user $username admin
     fi
 done
 
@@ -172,8 +198,7 @@ openstack image create \
 --container-format bare \
 --public \
 --tag $tagdefault \
---description "Ubuntu server cloud image" \
-Ubuntu-Server-Image
+Ubuntu-Server
 
 openstack flavor create \
 --ram 1024 \
@@ -182,45 +207,145 @@ openstack flavor create \
 --vcpus 1 \
 --public \
 --description "Flavor for Ubuntu server instances" \
+--project-domain CloudLearnDomain \
 Ubuntu-Server-Flavor
+
+# Creating instances and configuring
 
 tail -n +2 Original_Popis_studenata.csv | while IFS=';' read -r ime prezime rola
 do
     if [ "$rola" == "instructor" ]; then
     username="$ime.$prezime"
+    projectname="$username-Instructor-Project"
 
-    # Creating SSH key for each instructor
     ssh-keygen -t rsa -b 2048 -f $username-JumpHost-key -N ""
-
     ssh-keygen -t rsa -b 2048 -f $username-WordPress-key -N ""
 
-    openstack keypair create \
-    --user $username \
-    --project-domain CloudLearnDomain \
-    --public-key $username-JumpHost-key.pub \
-    $username-JumpHost-key
+    openstack keypair create --user $username --public-key $username-JumpHost-key.pub $username-JumpHost-key
+    openstack keypair create --user $username --public-key $username-WordPress-key.pub $username-WordPress-key
 
-    openstack keypair create \
-    --user $username \
-    --project-domain CloudLearnDomain \
-    --public-key $username-WordPress-key.pub \
-    $username-WordPress-key
+    cat $username-JumpHost-key.pub $username-WordPress-key.pub > $username-CombinedJumpHost-key.pub
+    openstack keypair create --user $username --public-key $username-CombinedJumpHost-key.pub $username-CombinedJumpHost-key
 
-    echo "Creating JumpHost for instructor $username"
+    echo "Creating Instructor JumpHost instance"
 
-    openstack server create \
-        --project "$username-Instructor-Project" \
+        openstack server create \
+        --project $projectname \
         --flavor Ubuntu-Server-Flavor \
-        --image Ubuntu-Server-Image \
+        --image Ubuntu-Server \
         --nic net-id=$(openstack network show -f value -c id $username-private-network) \
-        --security-group $username-secgroup \
-        --key-name $username-JumpHost-key \
-        --min 1 --max 1 \
-        --description "JumpHost for $username" \
+        --security-group $username-jumphost-secgroup \
+        --key-name $username-CombinedJumpHost-key \
         $username-jumphost
 
+    echo "Creating WordPress instances for $username"
 
+    for i in {1..4}; do 
+        openstack server create \
+            --project $projectname \
+            --flavor Ubuntu-Server-Flavor \
+            --image Ubuntu-Server \
+            --nic net-id=$(openstack network show -f value -c id $username-private-network) \
+            --security-group $username-wordpress-secgroup \
+            --key-name $username-WordPress-key \
+            --user-data cloud-init-wordpress.yaml \
+            $username-wordpress-$i
+    done
 
+    openstack loadbalancer create --name $username-lb --vip-subnet-id $username-private-subnet --project $projectname
 
-    fi
+    openstack loadbalancer listener create --name $username-http-listener --protocol HTTP --protocol-port 80 $username-lb
+    openstack loadbalancer pool create --name $username-http-pool --lb $username-lb --listener $username-http-listener --protocol HTTP --lb-algorithm ROUND_ROBIN
+
+    openstack loadbalancer listener create --name $username-https-listener --protocol HTTPS --protocol-port 443 $username-lb
+    openstack loadbalancer pool create --name $username-https-pool --lb $username-lb --listener $username-https-listener --protocol HTTPS --lb-algorithm ROUND_ROBIN
+
+    openstack loadbalancer listener create --name $username-ssh-listener --protocol TCP --protocol-port 22 $username-lb
+    openstack loadbalancer pool create --name $username-ssh-pool --lb $username-lb --listener $username-ssh-listener --protocol TCP --lb-algorithm ROUND_ROBIN
+
+    # Get JumpHost private IP
+    JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
+
+    openstack loadbalancer member create --subnet-id $username-private-subnet --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
+
+    for i in {1..4}; do
+        WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
+        openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 80 $username-http-pool
+    done
+
+    for i in {1..4}; do
+        WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
+        openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 443 $username-https-pool
+    done
+
+    FLOATING_IP=$(openstack floating ip create -f value -c floating_ip_address provider-datacentre)
+    LB_VIP_PORT_ID=$(openstack loadbalancer show $username-lb -f value -c vip_port_id)
+    openstack floating ip set --port $LB_VIP_PORT_ID $FLOATING_IP
+
+    elif [ "$rola" == "student" ]; then
+    username="$ime.$prezime"
+    projectname="$username-Student-Project"
+
+    ssh-keygen -t rsa -b 2048 -f $username-JumpHost-key -N ""
+    ssh-keygen -t rsa -b 2048 -f $username-WordPress-key -N ""
+
+    openstack keypair create --user $username --public-key $username-JumpHost-key.pub $username-JumpHost-key
+    openstack keypair create --user $username --public-key $username-WordPress-key.pub $username-WordPress-key
+
+    cat $username-JumpHost-key.pub $username-WordPress-key.pub > $username-CombinedJumpHost-key.pub
+    openstack keypair create --user $username --public-key $username-CombinedJumpHost-key.pub $username-CombinedJumpHost-key
+
+    echo "Creating student JumpHost instance"
+
+        openstack server create \
+        --project $projectname \
+        --flavor Ubuntu-Server-Flavor \
+        --image Ubuntu-Server \
+        --nic net-id=$(openstack network show -f value -c id $username-private-network) \
+        --security-group $username-jumphost-secgroup \
+        --key-name $username-CombinedJumpHost-key \
+        $username-jumphost
+
+    echo "Creating WordPress instances for $username"
+
+    for i in {1..4}; do 
+        openstack server create \
+            --project $projectname \
+            --flavor Ubuntu-Server-Flavor \
+            --image Ubuntu-Server \
+            --nic net-id=$(openstack network show -f value -c id $username-private-network) \
+            --security-group $username-wordpress-secgroup \
+            --key-name $username-WordPress-key \
+            --user-data cloud-init-wordpress.yaml \
+            $username-wordpress-$i
+    done
+
+        # Create load balancer for student
+    openstack loadbalancer create --name $username-lb --vip-subnet-id $username-private-subnet --project $projectname
+
+    # Create listeners and pools
+    openstack loadbalancer listener create --name $username-http-listener --protocol HTTP --protocol-port 80 $username-lb
+    openstack loadbalancer pool create --name $username-http-pool --lb $username-lb --listener $username-http-listener --protocol HTTP --lb-algorithm ROUND_ROBIN
+
+    openstack loadbalancer listener create --name $username-https-listener --protocol HTTPS --protocol-port 443 $username-lb
+    openstack loadbalancer pool create --name $username-https-pool --lb $username-lb --listener $username-https-listener --protocol HTTPS --lb-algorithm ROUND_ROBIN
+
+    openstack loadbalancer listener create --name $username-ssh-listener --protocol TCP --protocol-port 22 $username-lb
+    openstack loadbalancer pool create --name $username-ssh-pool --lb $username-lb --listener $username-ssh-listener --protocol TCP --lb-algorithm ROUND_ROBIN
+
+    # Add JumpHost to SSH pool
+    JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
+    openstack loadbalancer member create --subnet-id $username-private-subnet --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
+
+    # Add WordPress VMs to HTTP and HTTPS pools
+    for i in {1..4}; do
+        WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
+        openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 80 $username-http-pool
+        openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 443 $username-https-pool
+    done
+
+    # Allocate and associate a floating IP to the student's load balancer VIP
+    FLOATING_IP=$(openstack floating ip create -f value -c floating_ip_address provider-datacentre)
+    LB_VIP_PORT_ID=$(openstack loadbalancer show $username-lb -f value -c vip_port_id)
+    openstack floating ip set --port $LB_VIP_PORT_ID $FLOATING_IP
 done
