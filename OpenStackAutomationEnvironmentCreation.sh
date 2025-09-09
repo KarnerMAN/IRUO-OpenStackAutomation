@@ -21,6 +21,33 @@ echo "Creating Student group and Instructor group"
 openstack group create --domain CloudLearnDomain --description "Group for Students" StudentGroup 
 openstack group create --domain CloudLearnDomain --description "Group for Instructors" InstructorGroup 
 
+
+# Configuring Image and Flavor
+
+echo "Creating Ubuntu-Server image"
+
+wget -q https://cloud-images.ubuntu.com/daily/server/jammy/current/jammy-server-cloudimg-amd64.img
+
+openstack image create \
+--file jammy-server-cloudimg-amd64.img \
+--disk-format qcow2 \
+--container-format bare \
+--public \
+--tag course:test \
+Ubuntu-Server
+
+echo "Creating flavor for Ubuntu server instances"
+
+openstack flavor create \
+--ram 1024 \
+--disk 16 \
+--ephemeral 16 \
+--vcpus 1 \
+--public \
+--project-domain CloudLearnDomain \
+Ubuntu-Server-Flavor
+
+
 # Wait for groups to exist
 for i in {1..10}; do
     openstack group show --domain CloudLearnDomain StudentGroup && break
@@ -185,32 +212,6 @@ do
 done
 
 rm -f $allinstructors
-
-# Configuring Image and Flavor
-
-echo "Creating Ubuntu-Server image"
-
-wget -q https://cloud-images.ubuntu.com/daily/server/jammy/current/jammy-server-cloudimg-amd64.img
-
-openstack image create \
---file jammy-server-cloudimg-amd64.img \
---disk-format qcow2 \
---container-format bare \
---public \
---tag course:test \
-Ubuntu-Server
-
-echo "Creating flavor for Ubuntu server instances"
-
-openstack flavor create \
---ram 1024 \
---disk 16 \
---ephemeral 16 \
---vcpus 1 \
---public \
---project-domain CloudLearnDomain \
-Ubuntu-Server-Flavor
-
 # Creating instances and configuring
 
 tail -n +2 Original_Popis_studenata.csv | while IFS=';' read -r ime prezime rola
@@ -233,7 +234,6 @@ do
     echo "Creating Instructor JumpHost instance"
 
         openstack server create \
-        --project $projectname \
         --flavor Ubuntu-Server-Flavor \
         --image Ubuntu-Server \
         --nic net-id=$(openstack network show -f value -c id $username-private-network) \
@@ -243,9 +243,8 @@ do
 
     echo "Creating WordPress instances for $username"
 
-    for i in {1..4}; do 
+    for i in {1..4}; do
         openstack server create \
-            --project $projectname \
             --flavor Ubuntu-Server-Flavor \
             --image Ubuntu-Server \
             --nic net-id=$(openstack network show -f value -c id $username-private-network) \
@@ -301,7 +300,6 @@ do
     echo "Creating student JumpHost instance"
 
         openstack server create \
-        --project $projectname \
         --flavor Ubuntu-Server-Flavor \
         --image Ubuntu-Server \
         --nic net-id=$(openstack network show -f value -c id $username-private-network) \
@@ -313,7 +311,6 @@ do
 
     for i in {1..4}; do 
         openstack server create \
-            --project $projectname \
             --flavor Ubuntu-Server-Flavor \
             --image Ubuntu-Server \
             --nic net-id=$(openstack network show -f value -c id $username-private-network) \
