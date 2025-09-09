@@ -8,6 +8,8 @@ tagdefault="course:test"
 
 source ~/admin-rc
 
+export OS_COMPUTE_API_VERSION=2.55
+
 echo "Creation of OpenStack Environment Started"
 echo
 
