@@ -188,6 +188,8 @@ rm -f $allinstructors
 
 # Configuring Image and Flavor
 
+echo "Creating Ubuntu-Server image"
+
 wget -q https://cloud-images.ubuntu.com/daily/server/jammy/current/jammy-server-cloudimg-amd64.img
 
 openstack image create \
@@ -198,13 +200,14 @@ openstack image create \
 --tag course:test \
 Ubuntu-Server
 
+echo "Creating flavor for Ubuntu server instances"
+
 openstack flavor create \
 --ram 1024 \
 --disk 16 \
 --ephemeral 16 \
 --vcpus 1 \
 --public \
---description "Flavor for Ubuntu server instances" \
 --project-domain CloudLearnDomain \
 Ubuntu-Server-Flavor
 
@@ -215,6 +218,8 @@ do
     if [ "$rola" == "instructor" ]; then
     username="$ime.$prezime"
     projectname="$username-Instructor-Project"
+
+    # SSH key logic
 
     ssh-keygen -t rsa -b 2048 -f $username-JumpHost-key -N ""
     ssh-keygen -t rsa -b 2048 -f $username-WordPress-key -N ""
