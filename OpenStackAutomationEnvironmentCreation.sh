@@ -80,7 +80,7 @@ do
         projectname="$username-Instructor-Project"
 
         echo "Adding user to instructor group"
-        openstack group add user --domain CloudLearnDomain InstructorGroup $username
+        openstack group add user --user-domain CloudLearnDomain InstructorGroup $username
 
         echo "Creating project for instructor"
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
@@ -147,7 +147,7 @@ do
         projectname="$username-Student-Project"
 
         echo "Adding user to student group"
-        openstack group add user --domain CloudLearnDomain StudentGroup $username
+        openstack group add user --user-domain CloudLearnDomain StudentGroup $username
 
         echo "Creating project for student"
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
@@ -240,11 +240,11 @@ do
     ssh-keygen -t rsa -b 2048 -f $username-JumpHost-key -N ""
     ssh-keygen -t rsa -b 2048 -f $username-WordPress-key -N ""
 
-    openstack keypair create --user $username --public-key $username-JumpHost-key.pub $username-JumpHost-key
-    openstack keypair create --user $username --public-key $username-WordPress-key.pub $username-WordPress-key
+    openstack keypair create --public-key $username-JumpHost-key.pub $username-JumpHost-key
+    openstack keypair create --public-key $username-WordPress-key.pub $username-WordPress-key
 
     cat $username-JumpHost-key.pub $username-WordPress-key.pub > $username-CombinedJumpHost-key.pub
-    openstack keypair create --user $username --public-key $username-CombinedJumpHost-key.pub $username-CombinedJumpHost-key
+    openstack keypair create --public-key $username-CombinedJumpHost-key.pub $username-CombinedJumpHost-key
 
     echo "Creating Instructor JumpHost instance"
 
@@ -255,8 +255,6 @@ do
         --security-group $username-jumphost-secgroup \
         --key-name $username-CombinedJumpHost-key \
         $username-jumphost
-
-        openstack server wait --timeout 600 $username-jumphost
 
     echo "Creating WordPress instances for $username"
 
@@ -270,7 +268,6 @@ do
             --user-data cloud-init-wordpress.yaml \
             $username-wordpress-$i
 
-        openstack server wait --timeout 600 $username-wordpress-$i
     done
 
     openstack loadbalancer create --name $username-lb --vip-subnet-id $username-private-subnet --project $projectname
@@ -310,11 +307,11 @@ do
     ssh-keygen -t rsa -b 2048 -f $username-JumpHost-key -N ""
     ssh-keygen -t rsa -b 2048 -f $username-WordPress-key -N ""
 
-    openstack keypair create --user $username --public-key $username-JumpHost-key.pub $username-JumpHost-key
-    openstack keypair create --user $username --public-key $username-WordPress-key.pub $username-WordPress-key
+    openstack keypair create --public-key $username-JumpHost-key.pub $username-JumpHost-key
+    openstack keypair create --public-key $username-WordPress-key.pub $username-WordPress-key
 
     cat $username-JumpHost-key.pub $username-WordPress-key.pub > $username-CombinedJumpHost-key.pub
-    openstack keypair create --user $username --public-key $username-CombinedJumpHost-key.pub $username-CombinedJumpHost-key
+    openstack keypair create --public-key $username-CombinedJumpHost-key.pub $username-CombinedJumpHost-key
 
     echo "Creating student JumpHost instance"
 
@@ -325,8 +322,6 @@ do
         --security-group $username-jumphost-secgroup \
         --key-name $username-CombinedJumpHost-key \
         $username-jumphost
-
-    openstack server wait --timeout 600 $username-jumphost
 
     echo "Creating WordPress instances for $username"
 
@@ -340,7 +335,6 @@ do
             --user-data cloud-init-wordpress.yaml \
             $username-wordpress-$i
 
-        openstack server wait --timeout 600 $username-wordpress-$i
     done
 
         # Create load balancer for student
