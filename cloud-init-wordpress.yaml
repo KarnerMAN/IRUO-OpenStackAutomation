@@ -1,0 +1,36 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+packages:
+  - apache2
+  - mysql-server
+  - php
+  - php-mysql
+  - libapache2-mod-php
+  - php-cli
+  - php-cgi
+  - php-gd
+  - unzip
+  - curl
+
+runcmd:
+  - systemctl enable apache2
+  - systemctl start apache2
+  - systemctl enable mysql
+  - systemctl start mysql
+  - mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'Pa$$w0rdMySQL'; FLUSH PRIVILEGES;"
+  - mysql -uroot -pPa$$w0rdMySQL -e "CREATE DATABASE wordpress_database DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci;"
+  - mysql -uroot -pPa$$w0rdMySQL -e "CREATE USER 'wordpress_db_user'@'localhost' IDENTIFIED BY 'Pa$$w0rd';"
+  - mysql -uroot -pPa$$w0rdMySQL -e "GRANT ALL PRIVILEGES ON wordpress_database.* TO 'wordpress_db_user'@'localhost';"
+  - mysql -uroot -pPa$$w0rdMySQL -e "FLUSH PRIVILEGES;"
+  - curl -o /tmp/wordpress.tar.gz https://wordpress.org/latest.tar.gz
+  - tar -xvzf /tmp/wordpress.tar.gz -C /tmp
+  - rm /tmp/wordpress.tar.gz
+  - cp -r /tmp/wordpress/* /var/www/html/
+  - chown -R www-data:www-data /var/www/html/
+  - chmod -R 755 /var/www/html/
+  - cp /var/www/html/wp-config-sample.php /var/www/html/wp-config.php
+  - sed -i "s/database_name_here/wordpress_database/" /var/www/html/wp-config.php
+  - sed -i "s/username_here/wordpress_db_user/" /var/www/html/wp-config.php
+  - sed -i "s/password_here/Pa$$w0rd/" /var/www/html/wp-config.php
+  - systemctl restart apache2
