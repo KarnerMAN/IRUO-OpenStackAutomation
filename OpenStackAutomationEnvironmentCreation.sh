@@ -73,19 +73,19 @@ do
     username="$ime.$prezime"
 
     echo "Adding user $ime $prezime to project"
-    openstack user create --domain CloudLearnDomain --project CloudLearn --password Pa$$w0rd123 $ime.$prezime
+    openstack user create --domain CloudLearnDomain --project CloudLearn --password Pa$$w0rd123 $username
     
     # Adding user to appropriate group
     if [[ "$rola" == "instruktor" ]]; then
         projectname="$username-Instructor-Project"
 
         echo "Adding user to instructor group"
-        openstack group add user --group-domain CloudLearnDomain InstructorGroup $username
+        openstack group add user --user-domain CloudLearnDomain --group-domain CloudLearnDomain InstructorGroup $username
 
         echo "Creating project for instructor"
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
 
-        openstack role add --project $projectname --user $username admin
+        openstack role add --group-domain CloudLearnDomain --project $projectname --project-domain CloudLearnDomain --user $username --user-domain CloudLearnDomain admin
 
         echo "Creating a private network for instructor $username"
         openstack network create \
@@ -139,18 +139,18 @@ do
         openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 80 --ingress --description "Allow HTTP" $username-wordpress-secgroup
         openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 443 --ingress --description "Allow HTTPS" $username-wordpress-secgroup
 
-        openstack role add --project $projectname --user $username admin
-
         echo "$username" >> $allinstructors
 
     elif [[ "$rola" == "student" ]]; then
         projectname="$username-Student-Project"
 
         echo "Adding user to student group"
-        openstack group add user --group-domain CloudLearnDomain StudentGroup $username
+        openstack group add user --user-domain CloudLearnDomain --group-domain CloudLearnDomain StudentGroup $username
 
         echo "Creating project for student"
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
+
+        openstack role add --group-domain CloudLearnDomain --project $projectname --project-domain CloudLearnDomain --user $username --user-domain CloudLearnDomain admin
 
         echo "Creating a private network for student $username"
         openstack network create \
@@ -201,7 +201,6 @@ do
         openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 80 --ingress --description "Allow HTTP" $username-wordpress-secgroup
         openstack security group rule create --project $projectname --project-domain CloudLearnDomain --protocol tcp --dst-port 443 --ingress --description "Allow HTTPS" $username-wordpress-secgroup
 
-        openstack role add --project $projectname --user $username admin
     fi
 done < <(tail -n +2 Original_Popis_studenata.csv)
 
@@ -216,7 +215,7 @@ do
     if [[ "$rola" == "student" ]]; then
         projectname="$ime.$prezime-Student-Project"
         while read -r instructor; do
-            openstack role add --project $projectname --user $instructor admin
+            openstack role add --project $projectname --user $instructor --user-domain CloudLearnDomain admin
         done < $allinstructors
     fi
 done < <(tail -n +2 Original_Popis_studenata.csv)
@@ -232,138 +231,287 @@ do
     rola=$(echo "$rola" | xargs | tr -d '\r')
 
     if [[ "$rola" == "instruktor" ]]; then
-    username="$ime.$prezime"
-    projectname="$username-Instructor-Project"
+        username="$ime.$prezime"
+        projectname="$username-Instructor-Project"
 
-    # SSH key logic
+        # SSH key logic
 
-    ssh-keygen -t rsa -b 2048 -f $username-JumpHost-key -N ""
-    ssh-keygen -t rsa -b 2048 -f $username-WordPress-key -N ""
+        # Make names safe
 
-    openstack keypair create --public-key $username-JumpHost-key.pub $username-JumpHost-key
-    openstack keypair create --public-key $username-WordPress-key.pub $username-WordPress-key
+        safe_base=$(echo "$usernameinstructor" | sed 's/[^A-Za-z0-9_-]/_/g')
 
-    cat $username-JumpHost-key.pub $username-WordPress-key.pub > $username-CombinedJumpHost-key.pub
-    openstack keypair create --public-key $username-CombinedJumpHost-key.pub $username-CombinedJumpHost-key
+        # Safe keypair names
+        safe_jump_key="${safe_base}-JumpHost-key"
+        safe_wp_key="${safe_base}-WordPress-key"
+        safe_combined_key="${safe_base}-CombinedJumpHost-key"
 
-    echo "Creating Instructor JumpHost instance"
+        # Generate SSH keys (safe filenames)
+        ssh-keygen -t rsa -b 2048 -f "$safe_jump_key" -N ""
+        ssh-keygen -t rsa -b 2048 -f "$safe_wp_key" -N ""
 
-        openstack server create \
-        --flavor Ubuntu-Server-Flavor \
-        --image Ubuntu-Server \
-        --nic net-id=$(openstack network show -f value -c id $username-private-network) \
-        --security-group $username-jumphost-secgroup \
-        --key-name $username-CombinedJumpHost-key \
-        $username-jumphost
+        # Create OpenStack keypairs with safe names
+        openstack keypair create --public-key "$safe_jump_key.pub" "$safe_jump_key"
+        openstack keypair create --public-key "$safe_wp_key.pub" "$safe_wp_key"
 
-    echo "Creating WordPress instances for $username"
+        # Combine public keys and create combined keypair
+        cat "$safe_jump_key.pub" "$safe_wp_key.pub" > "$safe_combined_key.pub"
+        openstack keypair create --public-key "$safe_combined_key.pub" "$safe_combined_key"
 
-    for i in {1..4}; do
-        openstack server create \
+        echo "Creating Instructor JumpHost instance"
+
+            openstack server create \
             --flavor Ubuntu-Server-Flavor \
             --image Ubuntu-Server \
             --nic net-id=$(openstack network show -f value -c id $username-private-network) \
-            --security-group $username-wordpress-secgroup \
-            --key-name $username-WordPress-key \
-            --user-data cloud-init-wordpress.yaml \
-            $username-wordpress-$i
+            --security-group $username-jumphost-secgroup \
+            --key-name $username-CombinedJumpHost-key \
+            $username-jumphost
 
-    done
+        echo "Creating WordPress instances for $username"
 
-    openstack loadbalancer create --name $username-lb --vip-subnet-id $username-private-subnet --project $projectname
+        for i in {1..4}; do
+            openstack server create \
+                --flavor Ubuntu-Server-Flavor \
+                --image Ubuntu-Server \
+                --nic net-id=$(openstack network show -f value -c id $username-private-network) \
+                --security-group $username-wordpress-secgroup \
+                --key-name $username-WordPress-key \
+                --user-data cloud-init-wordpress.yaml \
+                $username-wordpress-$i
 
-    openstack loadbalancer listener create --name $username-http-listener --protocol HTTP --protocol-port 80 $username-lb
-    openstack loadbalancer pool create --name $username-http-pool --lb $username-lb --listener $username-http-listener --protocol HTTP --lb-algorithm ROUND_ROBIN
+        done
 
-    openstack loadbalancer listener create --name $username-https-listener --protocol HTTPS --protocol-port 443 $username-lb
-    openstack loadbalancer pool create --name $username-https-pool --lb $username-lb --listener $username-https-listener --protocol HTTPS --lb-algorithm ROUND_ROBIN
+        openstack loadbalancer create --name $username-lb --vip-subnet-id $username-private-subnet --project $projectname
 
-    openstack loadbalancer listener create --name $username-ssh-listener --protocol TCP --protocol-port 22 $username-lb
-    openstack loadbalancer pool create --name $username-ssh-pool --lb $username-lb --listener $username-ssh-listener --protocol TCP --lb-algorithm ROUND_ROBIN
+            while true; do
+                STATUS=$(openstack loadbalancer show $username-lb -f value -c provisioning_status)
+                if [[ "$STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for load balancer $username-lb to become ACTIVE..."
+                sleep 10
+            done
 
-    # Get JumpHost private IP
-    JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
+        openstack loadbalancer listener create --name $username-http-listener --protocol HTTP --protocol-port 80 $username-lb
 
-    openstack loadbalancer member create --subnet-id $username-private-subnet --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
+            while true; do
+                STATUS=$(openstack loadbalancer listener show $username-http-listener -f value -c provisioning_status)
+                if [[ "$STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for listener $username-http-listener to become ACTIVE..."
+                sleep 10
+            done
 
-    for i in {1..4}; do
-        WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
-        openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 80 $username-http-pool
-    done
 
-    for i in {1..4}; do
-        WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
-        openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 443 $username-https-pool
-    done
+        openstack loadbalancer pool create --name $username-http-pool --lb $username-lb --listener $username-http-listener --protocol HTTP --lb-algorithm ROUND_ROBIN
 
-    FLOATING_IP=$(openstack floating ip create -f value -c floating_ip_address provider-datacentre)
-    LB_VIP_PORT_ID=$(openstack loadbalancer show $username-lb -f value -c vip_port_id)
-    openstack floating ip set --port $LB_VIP_PORT_ID $FLOATING_IP
+            while true; do
+                POOL_STATUS=$(openstack loadbalancer pool show $username-http-pool -f value -c provisioning_status)
+                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for pool $username-http-pool to become ACTIVE..."
+                sleep 10
+            done
+
+
+        openstack loadbalancer listener create --name $username-https-listener --protocol HTTPS --protocol-port 443 $username-lb
+
+            while true; do
+                STATUS=$(openstack loadbalancer listener show $username-https-listener -f value -c provisioning_status)
+                if [[ "$STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for listener $username-https-listener to become ACTIVE..."
+                sleep 10
+            done
+
+        openstack loadbalancer pool create --name $username-https-pool --lb $username-lb --listener $username-https-listener --protocol HTTPS --lb-algorithm ROUND_ROBIN
+
+            while true; do
+                POOL_STATUS=$(openstack loadbalancer pool show $username-https-pool -f value -c provisioning_status)
+                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for pool $username-https-pool to become ACTIVE..."
+                sleep 10
+            done
+
+        openstack loadbalancer listener create --name $username-ssh-listener --protocol TCP --protocol-port 22 $username-lb
+
+            while true; do
+                STATUS=$(openstack loadbalancer listener show $username-ssh-listener -f value -c provisioning_status)
+                if [[ "$STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for listener $username-ssh-listener to become ACTIVE..."
+                sleep 10
+            done
+
+        openstack loadbalancer pool create --name $username-ssh-pool --lb $username-lb --listener $username-ssh-listener --protocol TCP --lb-algorithm ROUND_ROBIN
+
+            while true; do
+                POOL_STATUS=$(openstack loadbalancer pool show $username-ssh-pool -f value -c provisioning_status)
+                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for pool $username-ssh-pool to become ACTIVE..."
+                sleep 10
+            done
+
+
+        # Get JumpHost private IP
+        JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
+
+        openstack loadbalancer member create --subnet-id $username-private-subnet --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
+
+        for i in {1..4}; do
+            WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
+            openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 80 $username-http-pool
+        done
+
+        for i in {1..4}; do
+            WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
+            openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 443 $username-https-pool
+        done
+
+        FLOATING_IP=$(openstack floating ip create -f value -c floating_ip_address provider-datacentre)
+        LB_VIP_PORT_ID=$(openstack loadbalancer show $username-lb -f value -c vip_port_id)
+        openstack floating ip set --port $LB_VIP_PORT_ID $FLOATING_IP
 
     elif [[ "$rola" == "student" ]]; then
-    username="$ime.$prezime"
-    projectname="$username-Student-Project"
 
-    ssh-keygen -t rsa -b 2048 -f $username-JumpHost-key -N ""
-    ssh-keygen -t rsa -b 2048 -f $username-WordPress-key -N ""
+        username="$ime.$prezime"
+        projectname="$username-Student-Project"
 
-    openstack keypair create --public-key $username-JumpHost-key.pub $username-JumpHost-key
-    openstack keypair create --public-key $username-WordPress-key.pub $username-WordPress-key
+        ssh-keygen -t rsa -b 2048 -f $username-JumpHost-key -N ""
+        ssh-keygen -t rsa -b 2048 -f $username-WordPress-key -N ""
 
-    cat $username-JumpHost-key.pub $username-WordPress-key.pub > $username-CombinedJumpHost-key.pub
-    openstack keypair create --public-key $username-CombinedJumpHost-key.pub $username-CombinedJumpHost-key
+        openstack keypair create --public-key $username-JumpHost-key.pub $username-JumpHost-key
+        openstack keypair create --public-key $username-WordPress-key.pub $username-WordPress-key
 
-    echo "Creating student JumpHost instance"
+        cat $username-JumpHost-key.pub $username-WordPress-key.pub > $username-CombinedJumpHost-key.pub
+        openstack keypair create --public-key $username-CombinedJumpHost-key.pub $username-CombinedJumpHost-key
 
-        openstack server create \
-        --flavor Ubuntu-Server-Flavor \
-        --image Ubuntu-Server \
-        --nic net-id=$(openstack network show -f value -c id $username-private-network) \
-        --security-group $username-jumphost-secgroup \
-        --key-name $username-CombinedJumpHost-key \
-        $username-jumphost
+        echo "Creating student JumpHost instance"
 
-    echo "Creating WordPress instances for $username"
-
-    for i in {1..4}; do 
-        openstack server create \
+            openstack server create \
             --flavor Ubuntu-Server-Flavor \
             --image Ubuntu-Server \
             --nic net-id=$(openstack network show -f value -c id $username-private-network) \
-            --security-group $username-wordpress-secgroup \
-            --key-name $username-WordPress-key \
-            --user-data cloud-init-wordpress.yaml \
-            $username-wordpress-$i
+            --security-group $username-jumphost-secgroup \
+            --key-name $username-CombinedJumpHost-key \
+            $username-jumphost
 
-    done
+        echo "Creating WordPress instances for $username"
 
-        # Create load balancer for student
-    openstack loadbalancer create --name $username-lb --vip-subnet-id $username-private-subnet --project $projectname
+        for i in {1..4}; do 
+            openstack server create \
+                --flavor Ubuntu-Server-Flavor \
+                --image Ubuntu-Server \
+                --nic net-id=$(openstack network show -f value -c id $username-private-network) \
+                --security-group $username-wordpress-secgroup \
+                --key-name $username-WordPress-key \
+                --user-data cloud-init-wordpress.yaml \
+                $username-wordpress-$i
 
-    # Create listeners and pools
-    openstack loadbalancer listener create --name $username-http-listener --protocol HTTP --protocol-port 80 $username-lb
-    openstack loadbalancer pool create --name $username-http-pool --lb $username-lb --listener $username-http-listener --protocol HTTP --lb-algorithm ROUND_ROBIN
+        done
 
-    openstack loadbalancer listener create --name $username-https-listener --protocol HTTPS --protocol-port 443 $username-lb
-    openstack loadbalancer pool create --name $username-https-pool --lb $username-lb --listener $username-https-listener --protocol HTTPS --lb-algorithm ROUND_ROBIN
 
-    openstack loadbalancer listener create --name $username-ssh-listener --protocol TCP --protocol-port 22 $username-lb
-    openstack loadbalancer pool create --name $username-ssh-pool --lb $username-lb --listener $username-ssh-listener --protocol TCP --lb-algorithm ROUND_ROBIN
+        openstack loadbalancer create --name $username-lb --vip-subnet-id $username-private-subnet --project $projectname
 
-    # Add JumpHost to SSH pool
-    JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
-    openstack loadbalancer member create --subnet-id $username-private-subnet --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
+            while true; do
+                STATUS=$(openstack loadbalancer show $username-lb -f value -c provisioning_status)
+                if [[ "$STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for load balancer $username-lb to become ACTIVE..."
+                sleep 10
+            done
 
-    # Add WordPress VMs to HTTP and HTTPS pools
-    for i in {1..4}; do
-        WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
-        openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 80 $username-http-pool
-        openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 443 $username-https-pool
-    done
+        openstack loadbalancer listener create --name $username-http-listener --protocol HTTP --protocol-port 80 $username-lb
 
-    # Allocate and associate a floating IP to the student's load balancer VIP
-    FLOATING_IP=$(openstack floating ip create -f value -c floating_ip_address provider-datacentre)
-    LB_VIP_PORT_ID=$(openstack loadbalancer show $username-lb -f value -c vip_port_id)
-    openstack floating ip set --port $LB_VIP_PORT_ID $FLOATING_IP
-    fi
+            while true; do
+                STATUS=$(openstack loadbalancer listener show $username-http-listener -f value -c provisioning_status)
+                if [[ "$STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for listener $username-http-listener to become ACTIVE..."
+                sleep 10
+            done
+
+        openstack loadbalancer pool create --name $username-http-pool --lb $username-lb --listener $username-http-listener --protocol HTTP --lb-algorithm ROUND_ROBIN
+
+            while true; do
+                POOL_STATUS=$(openstack loadbalancer pool show $username-http-pool -f value -c provisioning_status)
+                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for pool $username-http-pool to become ACTIVE..."
+                sleep 10
+            done
+
+
+        openstack loadbalancer listener create --name $username-https-listener --protocol HTTPS --protocol-port 443 $username-lb
+
+            while true; do
+                STATUS=$(openstack loadbalancer listener show $username-https-listener -f value -c provisioning_status)
+                if [[ "$STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for listener $username-https-listener to become ACTIVE..."
+                sleep 10
+            done
+
+        openstack loadbalancer pool create --name $username-https-pool --lb $username-lb --listener $username-https-listener --protocol HTTPS --lb-algorithm ROUND_ROBIN
+
+            while true; do
+                POOL_STATUS=$(openstack loadbalancer pool show $username-http-pool -f value -c provisioning_status)
+                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for pool $username-http-pool to become ACTIVE..."
+                sleep 10
+            done
+
+
+        openstack loadbalancer listener create --name $username-ssh-listener --protocol TCP --protocol-port 22 $username-lb
+
+            while true; do
+                STATUS=$(openstack loadbalancer listener show $username-ssh-listener -f value -c provisioning_status)
+                if [[ "$STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for listener $username-ssh-listener to become ACTIVE..."
+                sleep 10
+            done
+
+        openstack loadbalancer pool create --name $username-ssh-pool --lb $username-lb --listener $username-ssh-listener --protocol TCP --lb-algorithm ROUND_ROBIN
+
+            while true; do
+                POOL_STATUS=$(openstack loadbalancer pool show $username-ssh-pool -f value -c provisioning_status)
+                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
+                    break
+                fi
+                echo "Waiting for pool $username-ssh-pool to become ACTIVE..."
+                sleep 10
+            done
+
+        # Add JumpHost to SSH pool
+        JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
+        openstack loadbalancer member create --subnet-id $username-private-subnet --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
+
+        # Add WordPress VMs to HTTP and HTTPS pools
+        for i in {1..4}; do
+            WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
+            openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 80 $username-http-pool
+            openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 443 $username-https-pool
+        done
+
+        # Allocate and associate a floating IP to the student's load balancer VIP
+        FLOATING_IP=$(openstack floating ip create -f value -c floating_ip_address provider-datacentre)
+        LB_VIP_PORT_ID=$(openstack loadbalancer show $username-lb -f value -c vip_port_id)
+        openstack floating ip set --port $LB_VIP_PORT_ID $FLOATING_IP
+        fi
 done < <(tail -n +2 Original_Popis_studenata.csv)
