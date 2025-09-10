@@ -267,7 +267,7 @@ do
             --image Ubuntu-Server \
             --nic net-id=$(openstack network show -f value -c id $username-private-network) \
             --security-group $username-jumphost-secgroup \
-            --key-name $username-CombinedJumpHost-key \
+            --key-name $safe_combined_key \
             $username-jumphost
 
         echo "Creating WordPress instances for $username"
@@ -278,13 +278,15 @@ do
                 --image Ubuntu-Server \
                 --nic net-id=$(openstack network show -f value -c id $username-private-network) \
                 --security-group $username-wordpress-secgroup \
-                --key-name $username-WordPress-key \
+                --key-name $safe_wp_key \
                 --user-data cloud-init-wordpress.yaml \
                 $username-wordpress-$i
 
         done
 
-        openstack loadbalancer create --name $username-lb --vip-subnet-id $username-private-subnet --project $projectname
+        SUBNET_ID=$(openstack subnet show -f value -c id $username-private-subnet)
+
+        openstack loadbalancer create --name $username-lb --vip-subnet-id $SUBNET_ID --project $projectname
 
             while true; do
                 STATUS=$(openstack loadbalancer show $username-lb -f value -c provisioning_status)
@@ -367,16 +369,18 @@ do
         # Get JumpHost private IP
         JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
 
-        openstack loadbalancer member create --subnet-id $username-private-subnet --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
+        SUBNET_ID=$(openstack subnet show -f value -c id $username-private-subnet)
+
+        openstack loadbalancer member create --subnet-id $SUBNET_ID --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
 
         for i in {1..4}; do
             WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
-            openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 80 $username-http-pool
+            openstack loadbalancer member create --subnet-id $SUBNET_ID --address $WP_IP --protocol-port 80 $username-http-pool
         done
 
         for i in {1..4}; do
             WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
-            openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 443 $username-https-pool
+            openstack loadbalancer member create --subnet-id $SUBNET_ID --address $WP_IP --protocol-port 443 $username-https-pool
         done
 
         FLOATING_IP=$(openstack floating ip create -f value -c floating_ip_address provider-datacentre)
@@ -417,7 +421,7 @@ do
             --image Ubuntu-Server \
             --nic net-id=$(openstack network show -f value -c id $username-private-network) \
             --security-group $username-jumphost-secgroup \
-            --key-name $username-CombinedJumpHost-key \
+            --key-name $safe_combined_key \
             $username-jumphost
 
         echo "Creating WordPress instances for $username"
@@ -428,14 +432,15 @@ do
                 --image Ubuntu-Server \
                 --nic net-id=$(openstack network show -f value -c id $username-private-network) \
                 --security-group $username-wordpress-secgroup \
-                --key-name $username-WordPress-key \
+                --key-name $safe_wp_key \
                 --user-data cloud-init-wordpress.yaml \
                 $username-wordpress-$i
 
         done
 
+        SUBNET_ID=$(openstack subnet show -f value -c id $username-private-subnet)
 
-        openstack loadbalancer create --name $username-lb --vip-subnet-id $username-private-subnet --project $projectname
+        openstack loadbalancer create --name $username-lb --vip-subnet-id $SUBNET_ID --project $projectname
 
             while true; do
                 STATUS=$(openstack loadbalancer show $username-lb -f value -c provisioning_status)
@@ -516,13 +521,14 @@ do
 
         # Add JumpHost to SSH pool
         JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
-        openstack loadbalancer member create --subnet-id $username-private-subnet --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
+        SUBNET_ID=$(openstack subnet show -f value -c id $username-private-subnet)
+        openstack loadbalancer member create --subnet-id $SUBNET_ID --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
 
         # Add WordPress VMs to HTTP and HTTPS pools
         for i in {1..4}; do
             WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
-            openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 80 $username-http-pool
-            openstack loadbalancer member create --subnet-id $username-private-subnet --address $WP_IP --protocol-port 443 $username-https-pool
+            openstack loadbalancer member create --subnet-id $SUBNET_ID --address $WP_IP --protocol-port 80 $username-http-pool
+            openstack loadbalancer member create --subnet-id $SUBNET_ID --address $WP_IP --protocol-port 443 $username-https-pool
         done
 
         # Allocate and associate a floating IP to the student's load balancer VIP
