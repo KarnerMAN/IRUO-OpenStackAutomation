@@ -205,6 +205,8 @@ do
 done < <(tail -n +2 Original_Popis_studenata.csv)
 
 # Assigning all instructors as admins in all student projects
+
+echo "Giving instructors admin role in all student projects"
 while IFS=';' read -r ime prezime rola
 do
 
@@ -238,7 +240,7 @@ do
 
         # Make names safe
 
-        safe_base=$(echo "$usernameinstructor" | sed 's/[^A-Za-z0-9_-]/_/g')
+        safe_base=$(echo "$username" | sed 's/[^A-Za-z0-9_-]/_/g')
 
         # Safe keypair names
         safe_jump_key="${safe_base}-JumpHost-key"
@@ -248,6 +250,7 @@ do
         # Generate SSH keys (safe filenames)
         ssh-keygen -t rsa -b 2048 -f "$safe_jump_key" -N ""
         ssh-keygen -t rsa -b 2048 -f "$safe_wp_key" -N ""
+
 
         # Create OpenStack keypairs with safe names
         openstack keypair create --public-key "$safe_jump_key.pub" "$safe_jump_key"
@@ -385,14 +388,27 @@ do
         username="$ime.$prezime"
         projectname="$username-Student-Project"
 
-        ssh-keygen -t rsa -b 2048 -f $username-JumpHost-key -N ""
-        ssh-keygen -t rsa -b 2048 -f $username-WordPress-key -N ""
+        safe_base=$(echo "$username" | sed 's/[^A-Za-z0-9_-]/_/g')
 
-        openstack keypair create --public-key $username-JumpHost-key.pub $username-JumpHost-key
-        openstack keypair create --public-key $username-WordPress-key.pub $username-WordPress-key
+        # Safe keypair names
+        safe_jump_key="${safe_base}-JumpHost-key"
+        safe_wp_key="${safe_base}-WordPress-key"
+        safe_combined_key="${safe_base}-CombinedJumpHost-key"
 
-        cat $username-JumpHost-key.pub $username-WordPress-key.pub > $username-CombinedJumpHost-key.pub
-        openstack keypair create --public-key $username-CombinedJumpHost-key.pub $username-CombinedJumpHost-key
+        # Generate SSH keys (safe filenames)
+        ssh-keygen -t rsa -b 2048 -f "$safe_jump_key" -N ""
+        ssh-keygen -t rsa -b 2048 -f "$safe_wp_key" -N ""
+
+
+        # Create OpenStack keypairs with safe names
+        openstack keypair create --public-key "$safe_jump_key.pub" "$safe_jump_key"
+        openstack keypair create --public-key "$safe_wp_key.pub" "$safe_wp_key"
+
+        # Combine public keys and create combined keypair
+        cat "$safe_jump_key.pub" "$safe_wp_key.pub" > "$safe_combined_key.pub"
+        openstack keypair create --public-key "$safe_combined_key.pub" "$safe_combined_key"
+
+
 
         echo "Creating student JumpHost instance"
 
@@ -467,11 +483,11 @@ do
         openstack loadbalancer pool create --name $username-https-pool --lb $username-lb --listener $username-https-listener --protocol HTTPS --lb-algorithm ROUND_ROBIN
 
             while true; do
-                POOL_STATUS=$(openstack loadbalancer pool show $username-http-pool -f value -c provisioning_status)
+                POOL_STATUS=$(openstack loadbalancer pool show $username-https-pool -f value -c provisioning_status)
                 if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
                     break
                 fi
-                echo "Waiting for pool $username-http-pool to become ACTIVE..."
+                echo "Waiting for pool $username-https-pool to become ACTIVE..."
                 sleep 10
             done
 
