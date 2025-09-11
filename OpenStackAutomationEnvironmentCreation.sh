@@ -73,8 +73,8 @@ do
     username="$ime.$prezime"
 
     echo "Adding user $ime $prezime to project"
-    openstack user create --domain CloudLearnDomain --project CloudLearn --password Pa$$w0rd123 $username
-    
+    openstack user create --domain CloudLearnDomain --project CloudLearn --password 'Pa$$w0rd123' $username
+
     # Adding user to appropriate group
     if [[ "$rola" == "instruktor" ]]; then
         projectname="$username-Instructor-Project"
@@ -286,106 +286,73 @@ do
 
         SUBNET_ID=$(openstack subnet show -f value -c id $username-private-subnet)
 
-        openstack loadbalancer create --name $username-lb --vip-subnet-id $SUBNET_ID --project $projectname
+        echo "Creating load balancer for $username in project $projectname"
 
-            while true; do
-                STATUS=$(openstack loadbalancer show $username-lb -f value -c provisioning_status)
-                if [[ "$STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for load balancer $username-lb to become ACTIVE..."
-                sleep 10
-            done
+        # Use private subnet for VIP (students connect here, external access via floating IP)
+        openstack loadbalancer create \
+            --name $username-lb \
+            --vip-subnet-id $SUBNET_ID \
+            --project $projectname
 
+        # Wait for LB to become ACTIVE
+        while true; do
+            STATUS=$(openstack loadbalancer show $username-lb -f value -c provisioning_status)
+            if [[ "$STATUS" == "ACTIVE" ]]; then break; fi
+            echo "Waiting for load balancer $username-lb to become ACTIVE..."
+            sleep 10
+        done
+
+
+        # Create HTTP listener and pool
         openstack loadbalancer listener create --name $username-http-listener --protocol HTTP --protocol-port 80 $username-lb
-
-            while true; do
-                STATUS=$(openstack loadbalancer listener show $username-http-listener -f value -c provisioning_status)
-                if [[ "$STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for listener $username-http-listener to become ACTIVE..."
-                sleep 10
-            done
-
-
+        while true; do
+            STATUS=$(openstack loadbalancer listener show $username-http-listener -f value -c provisioning_status)
+            if [[ "$STATUS" == "ACTIVE" ]]; then break; fi
+            echo "Waiting for listener $username-http-listener to become ACTIVE..."
+            sleep 10
+        done
         openstack loadbalancer pool create --name $username-http-pool --lb $username-lb --listener $username-http-listener --protocol HTTP --lb-algorithm ROUND_ROBIN
 
-            while true; do
-                POOL_STATUS=$(openstack loadbalancer pool show $username-http-pool -f value -c provisioning_status)
-                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for pool $username-http-pool to become ACTIVE..."
-                sleep 10
-            done
-
-
+        # Create HTTPS listener and pool
         openstack loadbalancer listener create --name $username-https-listener --protocol HTTPS --protocol-port 443 $username-lb
-
-            while true; do
-                STATUS=$(openstack loadbalancer listener show $username-https-listener -f value -c provisioning_status)
-                if [[ "$STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for listener $username-https-listener to become ACTIVE..."
-                sleep 10
-            done
-
+        while true; do
+            STATUS=$(openstack loadbalancer listener show $username-https-listener -f value -c provisioning_status)
+            if [[ "$STATUS" == "ACTIVE" ]]; then break; fi
+            echo "Waiting for listener $username-https-listener to become ACTIVE..."
+            sleep 10
+        done
         openstack loadbalancer pool create --name $username-https-pool --lb $username-lb --listener $username-https-listener --protocol HTTPS --lb-algorithm ROUND_ROBIN
 
-            while true; do
-                POOL_STATUS=$(openstack loadbalancer pool show $username-https-pool -f value -c provisioning_status)
-                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for pool $username-https-pool to become ACTIVE..."
-                sleep 10
-            done
-
+        # Create SSH listener and pool
         openstack loadbalancer listener create --name $username-ssh-listener --protocol TCP --protocol-port 22 $username-lb
-
-            while true; do
-                STATUS=$(openstack loadbalancer listener show $username-ssh-listener -f value -c provisioning_status)
-                if [[ "$STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for listener $username-ssh-listener to become ACTIVE..."
-                sleep 10
-            done
-
+        while true; do
+            STATUS=$(openstack loadbalancer listener show $username-ssh-listener -f value -c provisioning_status)
+            if [[ "$STATUS" == "ACTIVE" ]]; then break; fi
+            echo "Waiting for listener $username-ssh-listener to become ACTIVE..."
+            sleep 10
+        done
         openstack loadbalancer pool create --name $username-ssh-pool --lb $username-lb --listener $username-ssh-listener --protocol TCP --lb-algorithm ROUND_ROBIN
 
-            while true; do
-                POOL_STATUS=$(openstack loadbalancer pool show $username-ssh-pool -f value -c provisioning_status)
-                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for pool $username-ssh-pool to become ACTIVE..."
-                sleep 10
-            done
-
-
-        # Get JumpHost private IP
-        JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
-
+        # Add JumpHost and WordPress instances as pool members (from student's private subnet)
         SUBNET_ID=$(openstack subnet show -f value -c id $username-private-subnet)
-
+        # JumpHost
+        JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
         openstack loadbalancer member create --subnet-id $SUBNET_ID --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
-
+        # WordPress
         for i in {1..4}; do
             WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
             openstack loadbalancer member create --subnet-id $SUBNET_ID --address $WP_IP --protocol-port 80 $username-http-pool
-        done
-
-        for i in {1..4}; do
-            WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
             openstack loadbalancer member create --subnet-id $SUBNET_ID --address $WP_IP --protocol-port 443 $username-https-pool
         done
 
+        # Allocate a floating IP for the LB so students can reach it
         FLOATING_IP=$(openstack floating ip create -f value -c floating_ip_address provider-datacentre)
         LB_VIP_PORT_ID=$(openstack loadbalancer show $username-lb -f value -c vip_port_id)
         openstack floating ip set --port $LB_VIP_PORT_ID $FLOATING_IP
+
+        echo "Load balancer for $username is ready at floating IP: $FLOATING_IP"
+
+
 
     elif [[ "$rola" == "student" ]]; then
 
@@ -440,100 +407,71 @@ do
 
         SUBNET_ID=$(openstack subnet show -f value -c id $username-private-subnet)
 
-        openstack loadbalancer create --name $username-lb --vip-subnet-id $SUBNET_ID --project $projectname
+        echo "Creating load balancer for $username in project $projectname"
 
-            while true; do
-                STATUS=$(openstack loadbalancer show $username-lb -f value -c provisioning_status)
-                if [[ "$STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for load balancer $username-lb to become ACTIVE..."
-                sleep 10
-            done
+        # Use private subnet for VIP (students connect here, external access via floating IP)
+        openstack loadbalancer create \
+            --name $username-lb \
+            --vip-subnet-id $SUBNET_ID \
+            --project $projectname
 
+        # Wait for LB to become ACTIVE
+        while true; do
+            STATUS=$(openstack loadbalancer show $username-lb -f value -c provisioning_status)
+            if [[ "$STATUS" == "ACTIVE" ]]; then break; fi
+            echo "Waiting for load balancer $username-lb to become ACTIVE..."
+            sleep 10
+        done
+
+
+        # Create HTTP listener and pool
         openstack loadbalancer listener create --name $username-http-listener --protocol HTTP --protocol-port 80 $username-lb
-
-            while true; do
-                STATUS=$(openstack loadbalancer listener show $username-http-listener -f value -c provisioning_status)
-                if [[ "$STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for listener $username-http-listener to become ACTIVE..."
-                sleep 10
-            done
-
+        while true; do
+            STATUS=$(openstack loadbalancer listener show $username-http-listener -f value -c provisioning_status)
+            if [[ "$STATUS" == "ACTIVE" ]]; then break; fi
+            echo "Waiting for listener $username-http-listener to become ACTIVE..."
+            sleep 10
+        done
         openstack loadbalancer pool create --name $username-http-pool --lb $username-lb --listener $username-http-listener --protocol HTTP --lb-algorithm ROUND_ROBIN
 
-            while true; do
-                POOL_STATUS=$(openstack loadbalancer pool show $username-http-pool -f value -c provisioning_status)
-                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for pool $username-http-pool to become ACTIVE..."
-                sleep 10
-            done
-
-
+        # Create HTTPS listener and pool
         openstack loadbalancer listener create --name $username-https-listener --protocol HTTPS --protocol-port 443 $username-lb
-
-            while true; do
-                STATUS=$(openstack loadbalancer listener show $username-https-listener -f value -c provisioning_status)
-                if [[ "$STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for listener $username-https-listener to become ACTIVE..."
-                sleep 10
-            done
-
+        while true; do
+            STATUS=$(openstack loadbalancer listener show $username-https-listener -f value -c provisioning_status)
+            if [[ "$STATUS" == "ACTIVE" ]]; then break; fi
+            echo "Waiting for listener $username-https-listener to become ACTIVE..."
+            sleep 10
+        done
         openstack loadbalancer pool create --name $username-https-pool --lb $username-lb --listener $username-https-listener --protocol HTTPS --lb-algorithm ROUND_ROBIN
 
-            while true; do
-                POOL_STATUS=$(openstack loadbalancer pool show $username-https-pool -f value -c provisioning_status)
-                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for pool $username-https-pool to become ACTIVE..."
-                sleep 10
-            done
-
-
+        # Create SSH listener and pool
         openstack loadbalancer listener create --name $username-ssh-listener --protocol TCP --protocol-port 22 $username-lb
-
-            while true; do
-                STATUS=$(openstack loadbalancer listener show $username-ssh-listener -f value -c provisioning_status)
-                if [[ "$STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for listener $username-ssh-listener to become ACTIVE..."
-                sleep 10
-            done
-
+        while true; do
+            STATUS=$(openstack loadbalancer listener show $username-ssh-listener -f value -c provisioning_status)
+            if [[ "$STATUS" == "ACTIVE" ]]; then break; fi
+            echo "Waiting for listener $username-ssh-listener to become ACTIVE..."
+            sleep 10
+        done
         openstack loadbalancer pool create --name $username-ssh-pool --lb $username-lb --listener $username-ssh-listener --protocol TCP --lb-algorithm ROUND_ROBIN
 
-            while true; do
-                POOL_STATUS=$(openstack loadbalancer pool show $username-ssh-pool -f value -c provisioning_status)
-                if [[ "$POOL_STATUS" == "ACTIVE" ]]; then
-                    break
-                fi
-                echo "Waiting for pool $username-ssh-pool to become ACTIVE..."
-                sleep 10
-            done
-
-        # Add JumpHost to SSH pool
-        JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
+        # Add JumpHost and WordPress instances as pool members (from student's private subnet)
         SUBNET_ID=$(openstack subnet show -f value -c id $username-private-subnet)
+        # JumpHost
+        JUMPHOST_IP=$(openstack server show -f value -c addresses $username-jumphost | awk -F '=' '{print $2}')
         openstack loadbalancer member create --subnet-id $SUBNET_ID --address $JUMPHOST_IP --protocol-port 22 $username-ssh-pool
-
-        # Add WordPress VMs to HTTP and HTTPS pools
+        # WordPress
         for i in {1..4}; do
             WP_IP=$(openstack server show -f value -c addresses $username-wordpress-$i | awk -F '=' '{print $2}')
             openstack loadbalancer member create --subnet-id $SUBNET_ID --address $WP_IP --protocol-port 80 $username-http-pool
             openstack loadbalancer member create --subnet-id $SUBNET_ID --address $WP_IP --protocol-port 443 $username-https-pool
         done
 
-        # Allocate and associate a floating IP to the student's load balancer VIP
+        # Allocate a floating IP for the LB so students can reach it
         FLOATING_IP=$(openstack floating ip create -f value -c floating_ip_address provider-datacentre)
         LB_VIP_PORT_ID=$(openstack loadbalancer show $username-lb -f value -c vip_port_id)
         openstack floating ip set --port $LB_VIP_PORT_ID $FLOATING_IP
+
+        echo "Load balancer for $username is ready at floating IP: $FLOATING_IP"
+
         fi
 done < <(tail -n +2 Original_Popis_studenata.csv)
