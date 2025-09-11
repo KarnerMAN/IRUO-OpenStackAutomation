@@ -2,6 +2,8 @@
 
 # Starting the Script
 
+
+dos2unix Original_Popis_studenata.csv
 source admin-rc
 
 export OS_COMPUTE_API_VERSION=2.55
