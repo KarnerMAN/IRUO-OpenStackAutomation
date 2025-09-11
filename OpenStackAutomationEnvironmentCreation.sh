@@ -27,20 +27,6 @@ echo
 
 openstack network set --description "Shared external network for CloudLearn" --tag course:test provider-datacentre
 
-
-
-openstack subnet create \
-  --network provider-datacentre \
-  --subnet-range 172.25.250.200/28 \
-  --gateway 172.25.250.201 \
-  --allocation-pool start=172.25.250.202,end=172.25.250.206 \
-  --dns-nameserver 8.8.8.8 \
-  provider-datacentre-subnet
-
-
-
-
-
 echo "Creating new OpenStack domain named CloudLearnDomain"
 openstack domain create --description "Domain for CloudLearn" CloudLearnDomain 
 
@@ -335,7 +321,7 @@ do
 
         done
 
-        PROVIDER_SUBNET_ID=$(openstack subnet show -f value -c id provider-datacentre-subnet)
+        PROVIDER_SUBNET_ID=$(openstack subnet show -f value -c id provider-subnet-172.25.250)
 
         echo "Creating load balancer for $username in project $projectname"
 
@@ -461,7 +447,7 @@ do
         done
 
 
-        PROVIDER_SUBNET_ID=$(openstack subnet show -f value -c id provider-datacentre-subnet)
+        PROVIDER_SUBNET_ID=$(openstack subnet show -f value -c id provider-subnet-172.25.250)
 
         echo "Creating load balancer for $username in project $projectname"
 
