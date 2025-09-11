@@ -6,7 +6,27 @@
 dos2unix Original_Popis_studenata.csv
 source admin-rc
 
-export OS_COMPUTE_API_VERSION=2.55
+switch_project() {
+switch_project() {
+    local projectname="$1"
+    local username="$2"
+
+    export OS_PROJECT_NAME="$projectname"
+    export OS_PROJECT_ID=$(openstack project show "$projectname" -f value -c id)
+    export OS_PROJECT_DOMAIN_NAME="CloudLearnDomain"
+    export OS_USER_DOMAIN_NAME="CloudLearnDomain"
+    export OS_USERNAME="$username"
+    export OS_PASSWORD="Pa$$w0rd123"
+    export OS_AUTH_URL="http://172.25.250.50:5000/v3"  # use same Keystone URL as admin-rc
+    export OS_IDENTITY_API_VERSION=3
+    export OS_COMPUTE_API_VERSION=2.55
+    export OS_VOLUME_API_VERSION=3
+    export OS_IMAGE_API_VERSION=2
+    export OS_NO_CACHE=True
+    export OS_AUTH_TYPE=password
+}
+
+}
 
 echo "Creation of OpenStack Environment Started"
 echo
@@ -89,6 +109,8 @@ do
 
         openstack role add --group-domain CloudLearnDomain --project $projectname --project-domain CloudLearnDomain --user $username --user-domain CloudLearnDomain admin
 
+        switch_project "$projectname" "$username"
+
         echo "Creating a private network for instructor $username"
         openstack network create \
         --project $projectname \
@@ -153,6 +175,8 @@ do
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
 
         openstack role add --group-domain CloudLearnDomain --project $projectname --project-domain CloudLearnDomain --user $username --user-domain CloudLearnDomain admin
+
+        switch_project "$projectname" "$username"
 
         echo "Creating a private network for student $username"
         openstack network create \
@@ -253,6 +277,7 @@ do
         ssh-keygen -t rsa -b 2048 -f "$safe_jump_key" -N ""
         ssh-keygen -t rsa -b 2048 -f "$safe_wp_key" -N ""
 
+        switch_project "$projectname" "$username"
 
         # Create OpenStack keypairs with safe names
         openstack keypair create --public-key "$safe_jump_key.pub" "$safe_jump_key"
@@ -263,6 +288,8 @@ do
         openstack keypair create --public-key "$safe_combined_key.pub" "$safe_combined_key"
 
         echo "Creating Instructor JumpHost instance"
+
+        switch_project "$projectname" "$username"
 
             openstack server create \
             --flavor Ubuntu-Server-Flavor \
@@ -275,6 +302,7 @@ do
         echo "Creating WordPress instances for $username"
 
         for i in {1..4}; do
+
             openstack server create \
                 --flavor Ubuntu-Server-Flavor \
                 --image Ubuntu-Server \
@@ -290,6 +318,8 @@ do
 
         echo "Creating load balancer for $username in project $projectname"
 
+        
+
         # Use private subnet for VIP (students connect here, external access via floating IP)
         openstack loadbalancer create \
             --name $username-lb \
@@ -304,6 +334,7 @@ do
             sleep 10
         done
 
+        
 
         # Create HTTP listener and pool
         openstack loadbalancer listener create --name $username-http-listener --protocol HTTP --protocol-port 80 $username-lb
@@ -315,6 +346,8 @@ do
         done
         openstack loadbalancer pool create --name $username-http-pool --lb $username-lb --listener $username-http-listener --protocol HTTP --lb-algorithm ROUND_ROBIN
 
+        
+
         # Create HTTPS listener and pool
         openstack loadbalancer listener create --name $username-https-listener --protocol HTTPS --protocol-port 443 $username-lb
         while true; do
@@ -324,6 +357,8 @@ do
             sleep 10
         done
         openstack loadbalancer pool create --name $username-https-pool --lb $username-lb --listener $username-https-listener --protocol HTTPS --lb-algorithm ROUND_ROBIN
+
+        
 
         # Create SSH listener and pool
         openstack loadbalancer listener create --name $username-ssh-listener --protocol TCP --protocol-port 22 $username-lb
@@ -372,6 +407,7 @@ do
         ssh-keygen -t rsa -b 2048 -f "$safe_jump_key" -N ""
         ssh-keygen -t rsa -b 2048 -f "$safe_wp_key" -N ""
 
+        switch_project "$projectname" "$username"
 
         # Create OpenStack keypairs with safe names
         openstack keypair create --public-key "$safe_jump_key.pub" "$safe_jump_key"
@@ -381,7 +417,7 @@ do
         cat "$safe_jump_key.pub" "$safe_wp_key.pub" > "$safe_combined_key.pub"
         openstack keypair create --public-key "$safe_combined_key.pub" "$safe_combined_key"
 
-
+        switch_project "$projectname" "$username"
 
         echo "Creating student JumpHost instance"
 
@@ -396,6 +432,7 @@ do
         echo "Creating WordPress instances for $username"
 
         for i in {1..4}; do 
+
             openstack server create \
                 --flavor Ubuntu-Server-Flavor \
                 --image Ubuntu-Server \
@@ -411,6 +448,8 @@ do
 
         echo "Creating load balancer for $username in project $projectname"
 
+        
+
         # Use private subnet for VIP (students connect here, external access via floating IP)
         openstack loadbalancer create \
             --name $username-lb \
@@ -425,6 +464,7 @@ do
             sleep 10
         done
 
+        
 
         # Create HTTP listener and pool
         openstack loadbalancer listener create --name $username-http-listener --protocol HTTP --protocol-port 80 $username-lb
@@ -436,6 +476,8 @@ do
         done
         openstack loadbalancer pool create --name $username-http-pool --lb $username-lb --listener $username-http-listener --protocol HTTP --lb-algorithm ROUND_ROBIN
 
+        
+
         # Create HTTPS listener and pool
         openstack loadbalancer listener create --name $username-https-listener --protocol HTTPS --protocol-port 443 $username-lb
         while true; do
@@ -445,6 +487,8 @@ do
             sleep 10
         done
         openstack loadbalancer pool create --name $username-https-pool --lb $username-lb --listener $username-https-listener --protocol HTTPS --lb-algorithm ROUND_ROBIN
+
+        
 
         # Create SSH listener and pool
         openstack loadbalancer listener create --name $username-ssh-listener --protocol TCP --protocol-port 22 $username-lb
