@@ -27,6 +27,17 @@ echo
 
 openstack network set --description "Shared external network for CloudLearn" --tag course:test provider-datacentre
 
+# --- ADD THIS ---
+openstack subnet create \
+  --network provider-datacentre \
+  --subnet-range 172.25.250.200/28 \
+  --gateway 172.25.250.201 \
+  --allocation-pool start=172.25.250.202,end=172.25.250.210 \
+  --dns-nameserver 8.8.8.8 \
+  provider-datacentre-subnet
+# --- END ADD ---
+
+
 echo "Creating new OpenStack domain named CloudLearnDomain"
 openstack domain create --description "Domain for CloudLearn" CloudLearnDomain 
 
@@ -321,7 +332,7 @@ do
 
         done
 
-        SUBNET_ID=$(openstack subnet show -f value -c id $username-private-subnet)
+        PROVIDER_SUBNET_ID=$(openstack subnet show -f value -c id provider-datacentre-subnet)
 
         echo "Creating load balancer for $username in project $projectname"
 
@@ -330,9 +341,8 @@ do
         # Use private subnet for VIP (students connect here, external access via floating IP)
         openstack loadbalancer create \
             --name $username-lb \
-            --vip-subnet-id $SUBNET_ID \
+            --vip-subnet-id $PROVIDER_SUBNET_ID \
             --project $projectname
-
         # Wait for LB to become ACTIVE
         while true; do
             STATUS=$(openstack loadbalancer show $username-lb -f value -c provisioning_status)
@@ -447,16 +457,15 @@ do
 
         done
 
-        SUBNET_ID=$(openstack subnet show -f value -c id $username-private-subnet)
+
+        PROVIDER_SUBNET_ID=$(openstack subnet show -f value -c id provider-datacentre-subnet)
 
         echo "Creating load balancer for $username in project $projectname"
-
-        
 
         # Use private subnet for VIP (students connect here, external access via floating IP)
         openstack loadbalancer create \
             --name $username-lb \
-            --vip-subnet-id $SUBNET_ID \
+            --vip-subnet-id $PROVIDER_SUBNET_ID \
             --project $projectname
 
         # Wait for LB to become ACTIVE
