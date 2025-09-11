@@ -41,6 +41,19 @@ openstack group create --domain CloudLearnDomain --description "Group for Studen
 openstack group create --domain CloudLearnDomain --description "Group for Instructors" InstructorGroup 
 
 
+# Set load balancer quota
+openstack loadbalancer quota set --loadbalancer 10 CloudLearn
+
+# Set listener quota
+openstack loadbalancer quota set --listener 20 CloudLearn
+
+# Set pool quota
+openstack loadbalancer quota set --pool 10 CloudLearn
+
+# Set health monitor quota
+openstack loadbalancer quota set --healthmonitor 10 CloudLearn
+
+
 # Configuring Image and Flavor
 
 echo "Creating Ubuntu-Server image"
