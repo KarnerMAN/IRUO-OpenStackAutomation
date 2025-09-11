@@ -114,6 +114,16 @@ do
         echo "Creating project for instructor"
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
 
+        # Set load balancer quotas for instructor project
+        openstack loadbalancer quota set \
+        --loadbalancer 5 \
+        --listener 10 \
+        --pool 5 \
+        --member 20 \
+        --healthmonitor 5 \
+        $projectname
+
+
         openstack role add --group-domain CloudLearnDomain --project $projectname --project-domain CloudLearnDomain --user $username --user-domain CloudLearnDomain admin
 
         use_user "$username" "$projectname"
@@ -180,6 +190,16 @@ do
 
         echo "Creating project for student"
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
+
+        # Set load balancer quotas for student project
+        openstack loadbalancer quota set \
+        --loadbalancer 3 \
+        --listener 5 \
+        --pool 3 \
+        --member 10 \
+        --healthmonitor 3 \
+        $projectname
+
 
         openstack role add --group-domain CloudLearnDomain --project $projectname --project-domain CloudLearnDomain --user $username --user-domain CloudLearnDomain admin
 
