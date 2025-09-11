@@ -27,15 +27,18 @@ echo
 
 openstack network set --description "Shared external network for CloudLearn" --tag course:test provider-datacentre
 
-# --- ADD THIS ---
+
+
 openstack subnet create \
   --network provider-datacentre \
   --subnet-range 172.25.250.200/28 \
   --gateway 172.25.250.201 \
-  --allocation-pool start=172.25.250.202,end=172.25.250.210 \
+  --allocation-pool start=172.25.250.202,end=172.25.250.206 \
   --dns-nameserver 8.8.8.8 \
   provider-datacentre-subnet
-# --- END ADD ---
+
+
+
 
 
 echo "Creating new OpenStack domain named CloudLearnDomain"
