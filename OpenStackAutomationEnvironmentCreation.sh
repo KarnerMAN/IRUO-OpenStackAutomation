@@ -6,7 +6,6 @@
 dos2unix Original_Popis_studenata.csv
 source admin-rc
 
-
 echo "Creation of OpenStack Environment Started"
 echo
 
@@ -101,8 +100,6 @@ do
 
         openstack role add --group-domain CloudLearnDomain --project $projectname --project-domain CloudLearnDomain --user $username --user-domain CloudLearnDomain admin
 
-        
-
         echo "Creating a private network for instructor $username"
         openstack network create \
         --project $projectname \
@@ -167,8 +164,6 @@ do
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
 
         openstack role add --group-domain CloudLearnDomain --project $projectname --project-domain CloudLearnDomain --user $username --user-domain CloudLearnDomain admin
-
-        
 
         echo "Creating a private network for student $username"
         openstack network create \
@@ -269,8 +264,6 @@ do
         ssh-keygen -t rsa -b 2048 -f "$safe_jump_key" -N ""
         ssh-keygen -t rsa -b 2048 -f "$safe_wp_key" -N ""
 
-        
-
         # Create OpenStack keypairs with safe names
         openstack keypair create --public-key "$safe_jump_key.pub" "$safe_jump_key"
         openstack keypair create --public-key "$safe_wp_key.pub" "$safe_wp_key"
@@ -280,8 +273,6 @@ do
         openstack keypair create --public-key "$safe_combined_key.pub" "$safe_combined_key"
 
         echo "Creating Instructor JumpHost instance"
-
-        
 
             openstack server create \
             --flavor Ubuntu-Server-Flavor \
@@ -399,8 +390,6 @@ do
         ssh-keygen -t rsa -b 2048 -f "$safe_jump_key" -N ""
         ssh-keygen -t rsa -b 2048 -f "$safe_wp_key" -N ""
 
-        
-
         # Create OpenStack keypairs with safe names
         openstack keypair create --public-key "$safe_jump_key.pub" "$safe_jump_key"
         openstack keypair create --public-key "$safe_wp_key.pub" "$safe_wp_key"
@@ -408,8 +397,6 @@ do
         # Combine public keys and create combined keypair
         cat "$safe_jump_key.pub" "$safe_wp_key.pub" > "$safe_combined_key.pub"
         openstack keypair create --public-key "$safe_combined_key.pub" "$safe_combined_key"
-
-        
 
         echo "Creating student JumpHost instance"
 
