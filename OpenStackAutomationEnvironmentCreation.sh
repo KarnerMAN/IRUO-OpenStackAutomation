@@ -6,6 +6,22 @@
 dos2unix Original_Popis_studenata.csv
 source admin-rc
 
+function use_user() {
+    local username="$1"
+    local project="$2"
+    local domain="CloudLearnDomain"
+    local password='Pa$$w0rd123'
+
+    export OS_USERNAME="$username"
+    export OS_PROJECT_NAME="$project"
+    export OS_USER_DOMAIN_NAME="$domain"
+    export OS_PROJECT_DOMAIN_NAME="$domain"
+    export OS_AUTH_URL="http://172.25.250.50:5000/v3"
+    export OS_IDENTITY_API_VERSION=3
+    export OS_AUTH_TYPE=password
+    export OS_PASSWORD="$password"
+}
+
 echo "Creation of OpenStack Environment Started"
 echo
 
@@ -79,9 +95,9 @@ allinstructors=$(mktemp)
 while IFS=';' read -r ime prezime rola
 do
 
-    ime=$(echo "$ime" | xargs | tr -d '\r')
-    prezime=$(echo "$prezime" | xargs | tr -d '\r')
-    rola=$(echo "$rola" | xargs | tr -d '\r')
+    ime=$(echo "$ime" )
+    prezime=$(echo "$prezime" )
+    rola=$(echo "$rola" )
 
     username="$ime.$prezime"
 
@@ -99,6 +115,8 @@ do
         openstack project create --domain CloudLearnDomain --parent CloudLearn --description "Project for $ime $prezime" $projectname --tag course:test
 
         openstack role add --group-domain CloudLearnDomain --project $projectname --project-domain CloudLearnDomain --user $username --user-domain CloudLearnDomain admin
+
+        use_user "$username" "$projectname"
 
         echo "Creating a private network for instructor $username"
         openstack network create \
@@ -165,6 +183,8 @@ do
 
         openstack role add --group-domain CloudLearnDomain --project $projectname --project-domain CloudLearnDomain --user $username --user-domain CloudLearnDomain admin
 
+        use_user "$username" "$projectname"
+
         echo "Creating a private network for student $username"
         openstack network create \
         --project $projectname \
@@ -219,13 +239,15 @@ done < <(tail -n +2 Original_Popis_studenata.csv)
 
 # Assigning all instructors as admins in all student projects
 
+source admin-rc
+
 echo "Giving instructors admin role in all student projects"
 while IFS=';' read -r ime prezime rola
 do
 
-    ime=$(echo "$ime" | xargs | tr -d '\r')
-    prezime=$(echo "$prezime" | xargs | tr -d '\r')
-    rola=$(echo "$rola" | xargs | tr -d '\r')
+    ime=$(echo "$ime" )
+    prezime=$(echo "$prezime" )
+    rola=$(echo "$rola" )
 
     if [[ "$rola" == "student" ]]; then
         projectname="$ime.$prezime-Student-Project"
@@ -241,9 +263,9 @@ rm -f $allinstructors
 while IFS=';' read -r ime prezime rola
 do
 
-    ime=$(echo "$ime" | xargs | tr -d '\r')
-    prezime=$(echo "$prezime" | xargs | tr -d '\r')
-    rola=$(echo "$rola" | xargs | tr -d '\r')
+    ime=$(echo "$ime" )
+    prezime=$(echo "$prezime" )
+    rola=$(echo "$rola" )
 
     if [[ "$rola" == "instruktor" ]]; then
         username="$ime.$prezime"
@@ -263,6 +285,8 @@ do
         # Generate SSH keys (safe filenames)
         ssh-keygen -t rsa -b 2048 -f "$safe_jump_key" -N ""
         ssh-keygen -t rsa -b 2048 -f "$safe_wp_key" -N ""
+
+        use_user "$username" "$projectname"
 
         # Create OpenStack keypairs with safe names
         openstack keypair create --public-key "$safe_jump_key.pub" "$safe_jump_key"
@@ -372,8 +396,6 @@ do
 
         echo "Load balancer for $username is ready at floating IP: $FLOATING_IP"
 
-
-
     elif [[ "$rola" == "student" ]]; then
 
         username="$ime.$prezime"
@@ -389,6 +411,8 @@ do
         # Generate SSH keys (safe filenames)
         ssh-keygen -t rsa -b 2048 -f "$safe_jump_key" -N ""
         ssh-keygen -t rsa -b 2048 -f "$safe_wp_key" -N ""
+
+        use_user "$username" "$projectname"
 
         # Create OpenStack keypairs with safe names
         openstack keypair create --public-key "$safe_jump_key.pub" "$safe_jump_key"
