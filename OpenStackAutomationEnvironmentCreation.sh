@@ -7,7 +7,6 @@ dos2unix Original_Popis_studenata.csv
 source admin-rc
 
 switch_project() {
-switch_project() {
     local projectname="$1"
     local username="$2"
 
@@ -24,8 +23,6 @@ switch_project() {
     export OS_IMAGE_API_VERSION=2
     export OS_NO_CACHE=True
     export OS_AUTH_TYPE=password
-}
-
 }
 
 echo "Creation of OpenStack Environment Started"
